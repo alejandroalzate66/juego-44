@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Esquivar Obstáculos y Recoger Monedas</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background-color: #222;
+        }
+        
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            background-color: #333;
+            overflow: hidden;
+        }
+        
+        #player {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background-color: #3498db;
+            border-radius: 50%;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+        }
+        
+        .obstacle {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background-color: #e74c3c;
+            border-radius: 5px;
+        }
+        
+        .coin {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background-color: #f1c40f;
+            border-radius: 50%;
+        }
+        
+        #score-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 20px;
+            z-index: 200;
+        }
+        
+        #game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 32px;
+            text-align: center;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+            display: none;
+            z-index: 300;
+        }
+        
+        #restart-button {
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #2ecc71;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        
+        #start-screen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 32px;
+            text-align: center;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+            z-index: 300;
+        }
+        
+        #start-button {
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #2ecc71;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="player"></div>
+        <div id="score-container">
+            Monedas: <span id="coin-count">0</span> | Nivel: <span id="level">1</span>
+        </div>
+        <div id="game-over">
+            <h2>¡Juego Terminado!</h2>
+            <p>Monedas recogidas: <span id="final-score">0</span></p>
+            <p>Nivel alcanzado: <span id="final-level">1</span></p>
+            <button id="restart-button">Jugar de nuevo</button>
+        </div>
+        <div id="start-screen">
+            <h2>Esquivar Obstáculos y Recoger Monedas</h2>
+            <p>Mueve el jugador con las flechas izquierda y derecha ⬅️ ➡️</p>
+            <p>Esquiva los obstáculos rojos y recoge las monedas amarillas</p>
+            <button id="start-button">¡Comenzar!</button>
+        </div>
+    </div>
+
+    <script>
+        // Variables del juego
+        let gameRunning = false;
+        let player;
+        let gameContainer;
+        let playerX;
+        let playerSpeed = 10;
+        let coinCount = 0;
+        let level = 1;
+        let obstacleSpeed = 3;
+        let coinSpeed = 4;
+        let obstacleInterval = 1500;
+        let coinInterval = 2000;
+        let obstacleTimer;
+        let coinTimer;
+        let keys = {};
+
+        // Referencias a elementos DOM
+        const startButton = document.getElementById('start-button');
+        const restartButton = document.getElementById('restart-button');
+        const coinCountElement = document.getElementById('coin-count');
+        const levelElement = document.getElementById('level');
+        const finalScoreElement = document.getElementById('final-score');
+        const finalLevelElement = document.getElementById('final-level');
+        const gameOverScreen = document.getElementById('game-over');
+        const startScreen = document.getElementById('start-screen');
+
+        // Inicializar el juego
+        function init() {
+            player = document.getElementById('player');
+            gameContainer = document.getElementById('game-container');
+            playerX = gameContainer.offsetWidth / 2 - player.offsetWidth / 2;
+            player.style.left = playerX + 'px';
+            
+            // Configurar los eventos de teclado
+            document.addEventListener('keydown', function(e) {
+                keys[e.key] = true;
+            });
+            
+            document.addEventListener('keyup', function(e) {
+                keys[e.key] = false;
+            });
+            
+            // Configurar eventos de botones
+            startButton.addEventListener('click', startGame);
+            restartButton.addEventListener('click', restartGame);
+        }
+
+        // Iniciar el juego
+        function startGame() {
+            gameRunning = true;
+            startScreen.style.display = 'none';
+            
+            // Iniciar el bucle del juego
+            requestAnimationFrame(gameLoop);
+            
+            // Iniciar generadores de obstáculos y monedas
+            obstacleTimer = setInterval(createObstacle, obstacleInterval);
+            coinTimer = setInterval(createCoin, coinInterval);
+        }
+
+        // Reiniciar el juego
+        function restartGame() {
+            // Limpiar obstáculos y monedas
+            const obstacles = document.querySelectorAll('.obstacle');
+            obstacles.forEach(obstacle => obstacle.remove());
+            
+            const coins = document.querySelectorAll('.coin');
+            coins.forEach(coin => coin.remove());
+            
+            // Reiniciar variables
+            coinCount = 0;
+            level = 1;
+            obstacleSpeed = 3;
+            coinSpeed = 4;
+            obstacleInterval = 1500;
+            coinInterval = 2000;
+            
+            // Actualizar UI
+            coinCountElement.textContent = coinCount;
+            levelElement.textContent = level;
+            gameOverScreen.style.display = 'none';
+            
+            // Reiniciar posición del jugador
+            playerX = gameContainer.offsetWidth / 2 - player.offsetWidth / 2;
+            player.style.left = playerX + 'px';
+            
+            // Iniciar juego
+            startGame();
+        }
+
+        // Bucle principal del juego
+        function gameLoop() {
+            if (!gameRunning) return;
+            
+            // Mover el jugador
+            if (keys['ArrowLeft'] && playerX > 0) {
+                playerX -= playerSpeed;
+            }
+            
+            if (keys['ArrowRight'] && playerX < gameContainer.offsetWidth - player.offsetWidth) {
+                playerX += playerSpeed;
+            }
+            
+            player.style.left = playerX + 'px';
+            
+            // Mover obstáculos y verificar colisiones
+            moveObjects('.obstacle', obstacleSpeed, true);
+            
+            // Mover monedas y verificar colecciones
+            moveObjects('.coin', coinSpeed, false);
+            
+            // Continuar el bucle
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Mover objetos (obstáculos o monedas) y verificar colisiones
+        function moveObjects(selector, speed, isObstacle) {
+            const objects = document.querySelectorAll(selector);
+            const playerRect = player.getBoundingClientRect();
+            
+            objects.forEach(object => {
+                // Mover hacia abajo
+                let top = parseInt(object.style.top) || 0;
+                top += speed;
+                object.style.top = top + 'px';
+                
+                // Eliminar si sale de la pantalla
+                if (top > gameContainer.offsetHeight) {
+                    object.remove();
+                }
+                
+                // Verificar colisión
+                const objectRect = object.getBoundingClientRect();
+                if (
+                    playerRect.left < objectRect.right &&
+                    playerRect.right > objectRect.left &&
+                    playerRect.top < objectRect.bottom &&
+                    playerRect.bottom > objectRect.top
+                ) {
+                    if (isObstacle) {
+                        // Colisión con obstáculo - Game Over
+                        endGame();
+                    } else {
+                        // Colisión con moneda - Recoger
+                        collectCoin(object);
+                    }
+                }
+            });
+        }
+
+        // Crear un obstáculo
+        function createObstacle() {
+            if (!gameRunning) return;
+            
+            const obstacle = document.createElement('div');
+            obstacle.className = 'obstacle';
+            
+            // Posición aleatoria en X
+            const x = Math.random() * (gameContainer.offsetWidth - 40);
+            
+            obstacle.style.left = x + 'px';
+            obstacle.style.top = '0px';
+            
+            gameContainer.appendChild(obstacle);
+        }
+
+        // Crear una moneda
+        function createCoin() {
+            if (!gameRunning) return;
+            
+            const coin = document.createElement('div');
+            coin.className = 'coin';
+            
+            // Posición aleatoria en X
+            const x = Math.random() * (gameContainer.offsetWidth - 30);
+            
+            coin.style.left = x + 'px';
+            coin.style.top = '0px';
+            
+            gameContainer.appendChild(coin);
+        }
+
+        // Recoger una moneda
+        function collectCoin(coin) {
+            coin.remove();
+            coinCount++;
+            coinCountElement.textContent = coinCount;
+            
+            // Subir de nivel cada 10 monedas
+            if (coinCount % 10 === 0) {
+                levelUp();
+            }
+        }
+
+        // Subir de nivel
+        function levelUp() {
+            level++;
+            levelElement.textContent = level;
+            
+            // Aumentar dificultad
+            obstacleSpeed += 0.5;
+            coinSpeed += 0.3;
+            
+            // Aumentar frecuencia de obstáculos
+            clearInterval(obstacleTimer);
+            obstacleInterval = Math.max(obstacleInterval - 100, 500);
+            obstacleTimer = setInterval(createObstacle, obstacleInterval);
+            
+            // Aumentar frecuencia de monedas
+            clearInterval(coinTimer);
+            coinInterval = Math.max(coinInterval - 100, 800);
+            coinTimer = setInterval(createCoin, coinInterval);
+        }
+
+        // Finalizar el juego
+        function endGame() {
+            gameRunning = false;
+            
+            // Detener generadores
+            clearInterval(obstacleTimer);
+            clearInterval(coinTimer);
+            
+            // Actualizar pantalla de fin de juego
+            finalScoreElement.textContent = coinCount;
+            finalLevelElement.textContent = level;
+            gameOverScreen.style.display = 'block';
+        }
+
+        // Inicializar cuando se cargue el documento
+        window.onload = init;
+    </script>
+</body>
+</html>
